@@ -1,0 +1,10 @@
+.cache/**
+.idea/**
+**/.DS_Store
+**/node_modules/**
+build/**
+.env
+
+out/
+out2/
+.env
