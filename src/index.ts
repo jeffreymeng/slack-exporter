@@ -235,14 +235,20 @@ async function exportAllChannels(): Promise<void> {
 				);
 			});
 			numChannelsExported++;
-			updateProgress(
+			await updateProgress(
 				`Exported ${numMessagesExported} messages // ${numChannelsExported} channels`
 			);
-			fs.writeFile(
+			await fs.writeFile(
 				`./out/${channelTypeMap[type]}${
 					archived ? "/archived" : ""
 				}/${name}__${id}.json`,
 				JSON.stringify(channelData, null, 4)
+			);
+			const path = `${channelTypeMap[type]}${
+				archived ? "/archived" : ""
+			}/${name}__${id}`;
+			processChannelHistory(channelData, path).then((txt) =>
+				fs.writeFile(`./out/${path}.html`, txt)
 			);
 		})
 	);
@@ -252,7 +258,8 @@ async function exportAllChannels(): Promise<void> {
 }
 
 async function processChannelHistory(
-	history: Record<string, any>
+	history: Record<string, any>,
+	path: string
 ): Promise<string> {
 	const members = await getMembers();
 	const files: Record<string, any>[] = [];
@@ -269,10 +276,16 @@ async function processChannelHistory(
 		}
 	});
 	console.log("fetching files");
+	await fs.mkdir(`./out/${path}__files/`);
 	await Promise.all(
-		files.map((f) => {
+		files.map(async (f) => {
 			if (!f.url_private_download) {
 				console.log(`File with no URL: ${f.id} // ${f.name}`);
+
+				await fs.writeFile(
+					`./out/${path}__files/${f.id}__${f.name}__filedata.json`,
+					JSON.stringify(f, null, 4)
+				);
 				return Promise.resolve();
 			}
 			return axios
@@ -284,8 +297,7 @@ async function processChannelHistory(
 				})
 				.then((response) =>
 					fs.writeFile(
-						"./out/private-channels/chat__G977U7MDJ__files/" +
-							`${f.id}__${f.name}`,
+						`./out/${path}__files/${f.id}__${f.name}`,
 						response.data
 					)
 				)
@@ -296,43 +308,45 @@ async function processChannelHistory(
 		})
 	);
 	console.log("processing messages");
-	const processedMessages = history.messages.map(
-		(message: Record<string, any>) =>
-			`<p>${dayjs
-				.unix(parseFloat(message.ts))
-				.format("M/D/YY h:mm A")} <b>${
-				escapeHtml(memberIdMap[message.user]?.real_name) ||
-				`Unknown user ${escapeHtml(message.user)}`
-			}:</b> ${
-				escapeHtml(
-					message.text.replace(/&gt;/g, ">").replace(/&lt;/g, "<")
-				).replace(/\n/g, "<br/>") || "<NO TEXT>"
-			} ${
-				message.files != undefined
-					? `(${message.files.length} attached file${
-							message.files.length !== 1 ? "s" : ""
-					  }) ${message.files
-							.filter((f) => f.mimetype.indexOf("image") > -1)
-							.map(
-								(f) => `
-						  <img src="${
-								"./chat__G977U7MDJ__files/" +
-								`${f.id}__${f.name}`
-							}"/>`
-							)
-							.join("")}`
-					: ""
-			}</p>`
-	);
+	const processedMessages = history.messages
+		.sort((a, b) => a.ts - b.ts)
+		.map(
+			(message: Record<string, any>) =>
+				`<p>${dayjs
+					.unix(parseFloat(message.ts))
+					.format("M/D/YY h:mm A")} <b>${
+					escapeHtml(memberIdMap[message.user]?.real_name) ||
+					`Unknown user ${escapeHtml(message.user)}`
+				}:</b> ${
+					escapeHtml(
+						message.text.replace(/&gt;/g, ">").replace(/&lt;/g, "<")
+					).replace(/\n/g, "<br/>") || "<i>NO TEXT</i>"
+				} ${
+					message.files !== undefined
+						? `(${message.files.length} attached file${
+								message.files.length !== 1 ? "s" : ""
+						  }) ${message.files
+								.map((f) =>
+									(f.mimetype?.indexOf("image") ?? -1) > -1
+										? `<img src="../${path}__files/${f.id}__${f.name}"/>`
+										: !!f.url_private_download
+										? `<a href="../${path}__files/${f.id}__${f.name}">${f.id}__${f.name}</a>`
+										: `<a href="../${path}__files/${f.id}__${f.name}__filedata.json">${f.id}__${f.name}__filedata.json</a>`
+								)
+								.join("")}`
+						: ""
+				}</p>`
+		);
 
 	return wrapHTML(`
 <h1>${history.info.name} </h1>
-<p>Created ${dayjs
+<p>Channel created ${dayjs
 		.unix(parseFloat(history.info.created))
 		.format("M/D/YY h:mm A")}</p>
 <p>All times reported in UTC${dayjs().utcOffset() / 60}:${
 		dayjs().utcOffset() % 60 == 0 ? "00" : dayjs().utcOffset() % 60
 	}</p>
+<p>This file generated ${dayjs().format("M/D/YY h:mm A")}</p>
 <hr/>
 <div class="messages">
 ${processedMessages.join("\n")}
@@ -342,13 +356,8 @@ ${processedMessages.join("\n")}
 
 async function main() {
 	// console.log(await getMembers());
-	// exportAllChannels();
-	fs.readFile("./out/private-channels/chat__G977U7MDJ.json")
-		.then((data) => JSON.parse(data + ""))
-		.then((obj) => processChannelHistory(obj))
-		.then((txt) =>
-			fs.writeFile("./out/private-channels/chat__G977U7MDJ.html", txt)
-		);
+	await exportAllChannels();
+
 }
 
 main();

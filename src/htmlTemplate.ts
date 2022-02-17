@@ -1,4 +1,4 @@
-export default function wrapHTML(body: string) {
+export default function wrapHTML(body: string, name?: string) {
 
     return `
 <!DOCTYPE html>
@@ -10,7 +10,7 @@ export default function wrapHTML(body: string) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="author" content="Jeffrey Meng">
     <link rel="stylesheet" type="text/css" href="https://cdn.jeffkmeng.com/library/bootstrap/4.1.3/css/bootstrap.min.css">
-    <title>Jeffrey Template</title>
+    <title>${name || "Slack Export"}</title>
     <style>
         /* https://stackoverflow.com/a/3525675/5511561 */
 
@@ -48,6 +48,9 @@ export default function wrapHTML(body: string) {
             height: 32px;
             /* height + top/bottom padding + top/bottom border must add up to footer height */
             padding: 8px;
+        }
+        img {
+            width: 70%;
         }
     </style>
 </head>
